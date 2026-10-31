@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>职场管家 · 工作台</title>
+<style>
+  :root{
+    --bg:#0E1319; --panel:#151C24; --panel-2:#1A222C; --line:#27313D; --line-soft:#1F2933;
+    --text:#E8EEF4; --text-2:#9DACBB; --text-3:#7C8C9C;
+    --amber:#F2A93B; --amber-ink:#171106; --ok:#63B98C; --risk:#E07262; --info:#7AA9D8;
+    --mono:"Cascadia Mono","Consolas","Courier New",monospace;
+    --ui:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scrollbar-color:#33404E var(--bg)}
+  body{background:var(--bg);color:var(--text);font-family:var(--ui);font-size:15px;line-height:1.6}
+  ::selection{background:rgba(242,169,59,.28)}
+  button{font-family:inherit;cursor:pointer}
+  button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  /* ── 指挥条 ─────────────────────────── */
+  .bar{display:flex;align-items:center;gap:20px;padding:14px 26px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:20}
+  .brand{display:flex;align-items:baseline;gap:12px;white-space:nowrap}
+  .brand b{font-size:19px;font-weight:650;letter-spacing:.01em}
+  .brand span{font-family:var(--mono);font-size:11px;color:var(--amber);letter-spacing:.22em}
+  .bar .who{color:var(--text-2);font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar .who b{color:var(--text);font-weight:600}
+  .bar-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .clock{font-family:var(--mono);font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+  .dot.err{background:var(--risk)}
+  .btn{border:1px solid var(--line);background:var(--panel-2);color:var(--text);padding:8px 16px;font-size:13.5px;border-radius:8px;transition:background .15s,border-color .15s}
+  .btn:hover{background:#202A36;border-color:#37455480}
+  .btn:disabled{opacity:.45;cursor:wait}
+  .btn.primary{background:var(--amber);border-color:var(--amber);color:var(--amber-ink);font-weight:650}
+  .btn.primary:hover{background:#F7B658}
+  .btn.ghost{padding:6px 12px;font-size:12.5px;border-radius:7px}
+
+  /* ── 布局 ─────────────────────────── */
+  .wrap{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:0;max-width:1500px;margin:0 auto;min-height:calc(100vh - 61px)}
+  .bay{padding:26px 30px 60px;border-right:1px solid var(--line);min-width:0}
+  .rail{padding:26px 24px 60px;background:#11171F}
+
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin:34px 0 14px}
+  .sec-head:first-child{margin-top:0}
+  .sec-head h2{font-size:16.5px;font-weight:650;letter-spacing:.02em}
+  .sec-head .meta{font-family:var(--mono);font-size:12px;color:var(--text-3);letter-spacing:.08em}
+
+  /* ── 机会进度条（flight strip）───────── */
+  .strip{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:14px;overflow:hidden;transition:border-color .15s}
+  .strip:hover{border-color:#3A4756}
+  .strip.busy{opacity:.6;pointer-events:none}
+  .strip-top{display:flex;align-items:center;gap:14px;padding:14px 18px;flex-wrap:wrap}
+  .strip .tab{font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.06em;background:var(--bg);border:1px solid var(--line-soft);border-radius:6px;padding:3px 8px;white-space:nowrap}
+  .strip .title{min-width:220px;flex:1}
+  .strip .title b{font-size:15.5px;font-weight:650;display:block}
+  .strip .title span{color:var(--text-2);font-size:13px}
+  .strip .src{color:var(--text-3);font-size:12.5px;white-space:nowrap}
+  .strip .src::before{content:"来源 ";color:var(--text-3);opacity:.7}
+
+  .pills{display:flex;gap:4px;flex-wrap:wrap}
+  .pill{border:1px solid transparent;background:transparent;color:var(--text-3);font-size:12px;padding:4px 10px;border-radius:999px;transition:color .12s,background .12s}
+  .pill:hover{color:var(--text);background:var(--panel-2)}
+  .pill[aria-pressed="true"]{background:var(--amber);color:var(--amber-ink);font-weight:650}
+  .pill[data-tone="offer"][aria-pressed="true"]{background:var(--ok);color:#0C1710}
+  .pill[data-tone="drop"][aria-pressed="true"]{background:var(--risk);color:#1B0D0A}
+
+  /* 匹配区（本页唯一的编排动效）*/
+  .matchzone{display:grid;grid-template-rows:0fr;transition:grid-template-rows .5s cubic-bezier(.16,1,.3,1)}
+  .matchzone.open{grid-template-rows:1fr}
+  .matchzone>div{overflow:hidden}
+  .match-inner{border-top:1px dashed var(--line);padding:16px 18px 18px;display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+  .score{min-width:130px;text-align:left}
+  .score .n{font-family:var(--mono);font-size:44px;font-weight:600;line-height:1;color:var(--amber)}
+  .score .n small{font-size:16px;color:var(--text-3);font-weight:400}
+  .score .l{font-size:12px;color:var(--text-3);margin-top:6px;letter-spacing:.04em}
+  .terms{flex:1;min-width:260px;display:grid;gap:10px}
+  .terms .row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+  .terms .cap{font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.1em;min-width:64px;padding-top:4px}
+  .chip{font-size:12.5px;padding:2.5px 10px;border-radius:6px;border:1px solid var(--line)}
+  .chip.hit{color:var(--ok);border-color:#2C4A3A;background:rgba(99,185,140,.07)}
+  .chip.miss{color:#C9A063;border-color:#4A3E27;background:rgba(242,169,59,.05)}
+  .matchnote{flex-basis:100%;font-size:12px;color:var(--text-3)}
+  .strip .jd{border-top:1px solid var(--line-soft);padding:12px 18px 14px;color:var(--text-2);font-size:13.5px;display:none}
+  .strip .jd.open{display:block}
+  .jd-toggle{background:none;border:none;color:var(--info);font-size:12.5px;padding:8px 18px 10px;display:flex;align-items:center;gap:6px;width:100%;text-align:left}
+  .jd-toggle:hover{color:#9CC3E8}
+  .jd-toggle .chev{transition:transform .2s}
+  .jd-toggle[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  .empty{border:1px dashed var(--line);border-radius:12px;padding:44px 20px;text-align:center;color:var(--text-3)}
+  .empty b{display:block;color:var(--text-2);font-size:14.5px;margin-bottom:6px}
+
+  /* ── 档案栏 ─────────────────────────── */
+  .rail .block{padding:20px 0 22px;border-bottom:1px solid var(--line-soft)}
+  .rail .block:first-child{padding-top:0}
+  .rail h3{font-size:13px;font-weight:650;letter-spacing:.04em;color:var(--text);margin-bottom:12px;display:flex;justify-content:space-between;align-items:baseline}
+  .rail h3 .meta{font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.08em;font-weight:400}
+  .dossier-name{font-size:20px;font-weight:700;letter-spacing:.01em}
+  .dossier-tag{color:var(--text-2);font-size:13px;margin-top:6px}
+  .dossier-kv{margin-top:12px;font-size:12.5px;color:var(--text-3);display:flex;gap:18px;flex-wrap:wrap}
+  .dossier-kv code{font-family:var(--mono);color:var(--text-2);font-size:12px}
+
+  .tl{position:relative;padding-left:18px}
+  .tl::before{content:"";position:absolute;left:3px;top:6px;bottom:6px;width:1px;background:var(--line)}
+  .tl-item{position:relative;padding-bottom:18px}
+  .tl-item:last-child{padding-bottom:0}
+  .tl-item::before{content:"";position:absolute;left:-18px;top:7px;width:7px;height:7px;border-radius:50%;background:var(--line);border:1px solid var(--text-3)}
+  .tl-item:first-child::before{background:var(--amber);border-color:var(--amber)}
+  .tl-item .yr{font-family:var(--mono);font-size:11.5px;color:var(--amber);letter-spacing:.05em}
+  .tl-item .role{font-size:13.5px;font-weight:600;margin-top:2px}
+  .tl-item .org{font-size:12px;color:var(--text-3);margin-top:1px}
+  .tl-item ul{margin:8px 0 0 14px;list-style:none;display:none}
+  .tl-item.open ul{display:block}
+  .tl-item li{font-size:12.5px;color:var(--text-2);padding:2px 0 2px 12px;position:relative}
+  .tl-item li::before{content:"";position:absolute;left:0;top:11px;width:5px;height:1px;background:var(--text-3)}
+  .tl-more{background:none;border:none;color:var(--info);font-size:12px;padding:4px 0 0}
+  .tl-more:hover{color:#9CC3E8}
+
+  .skills h4{font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.14em;margin:12px 0 7px;font-weight:400}
+  .skills h4:first-of-type{margin-top:0}
+  .skill{font-size:12.5px;color:var(--text-2);padding:3.5px 0;border-bottom:1px dotted var(--line-soft)}
+  .skill:last-child{border-bottom:none}
+
+  .evi li{font-family:var(--mono);font-size:12px;color:var(--text-2);padding:3px 0;list-style:none;display:flex;gap:8px}
+  .evi li::before{content:"·";color:var(--amber)}
+
+  .logfeed li{list-style:none;display:flex;gap:10px;padding:5px 0;font-size:12.5px;border-bottom:1px dotted var(--line-soft)}
+  .logfeed li:last-child{border-bottom:none}
+  .logfeed time{font-family:var(--mono);color:var(--text-3);font-size:11.5px;white-space:nowrap;padding-top:1px}
+  .logfeed .a{color:var(--text);font-weight:600;white-space:nowrap}
+  .logfeed .d{color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .logfeed li.err .d{color:var(--risk)}
+
+  /* toast */
+  .toast{position:fixed;right:22px;bottom:22px;background:var(--panel-2);border:1px solid var(--line);border-left:none;border-radius:10px;padding:12px 18px;font-size:13.5px;box-shadow:6px 10px 28px rgba(0,0,0,.45);max-width:420px;opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s;z-index:50;pointer-events:none}
+  .toast.show{opacity:1;transform:none}
+  .toast.err{border-color:#5A3630}
+  .toast b{color:var(--amber)}
+  .toast.err b{color:var(--risk)}
+
+  .skel{color:var(--text-3);padding:60px 0;text-align:center;font-size:13px}
+
+  /* ── 编辑层（变更须经确认）──────────── */
+  .editgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px}
+  .editform{display:grid;gap:8px;align-content:start;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+  .editform label{font-size:12px;color:var(--text-3)}
+  .editform select,.editform input,.editform textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);font-family:inherit;font-size:13px;border-radius:7px;padding:7px 10px}
+  .editform textarea{resize:vertical;min-height:52px}
+  .editform .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .editform .btn{justify-self:start}
+  .hint{font-size:11.5px;color:var(--text-3);margin-top:4px}
+
+  /* 确认弹层 */
+  .overlay{position:fixed;inset:0;background:rgba(6,9,13,.72);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .overlay.show{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:520px;width:100%;padding:22px 24px;box-shadow:0 24px 60px rgba(0,0,0,.55)}
+  .modal h4{font-size:15px;font-weight:650;margin-bottom:10px}
+  .modal .m-body{font-size:13.5px;color:var(--text-2);border:1px dashed var(--line);border-radius:9px;padding:12px 14px;margin:10px 0 16px;max-height:44vh;overflow:auto}
+  .modal .m-body b{color:var(--amber)}
+  .modal .m-note{font-size:12px;color:var(--text-3);margin-bottom:14px}
+  .modal .m-actions{display:flex;gap:10px;justify-content:flex-end}
+
+  /* 工作流资产 */
+  .wf{margin-bottom:14px}
+  .wf:last-child{margin-bottom:0}
+  .wf .wf-ev{font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+  .wf-node{display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:5px 0 5px 10px;border-left:1px solid var(--line);position:relative}
+  .wf-node::before{content:"";position:absolute;left:-3.5px;top:12px;width:6px;height:6px;border-radius:50%;background:var(--line);border:1px solid var(--text-3)}
+  .wf-node .v{color:var(--amber);font-weight:600;white-space:nowrap}
+  .wf-node .o{color:var(--text-2)}
+  .wf-node .t{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .wf-empty{font-size:12.5px;color:var(--text-3)}
+
+  /* 备份 */
+  .bak{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dotted var(--line-soft);font-size:12.5px}
+  .bak:last-child{border-bottom:none}
+  .bak time{font-family:var(--mono);font-size:11.5px;color:var(--text-3);white-space:nowrap}
+  .bak .kb{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .bak .btn{margin-left:auto}
+
+  @media (max-width:1020px){
+    .wrap{grid-template-columns:1fr}
+    .bay{border-right:none;border-bottom:1px solid var(--line)}
+    .bar{flex-wrap:wrap;padding:12px 18px;gap:10px}
+    .bar .who{flex-basis:100%;order:3}
+  }
+</style>
+</head>
+<body>
+<!--
+  THESIS: 把"猎头公司老板的职业资产"当成一座运营中的控制塔来读——机会是塔台上的进度条，
+  档案是旁边的签派栏；拒绝 SaaS 后台的侧边栏+KPI卡阵默认排列。
+  OWN-WORLD: 深墨蓝面板与发丝线分区、琥珀信号色只给"当前状态与主行动"、
+  等宽字体承载一切度量（分数/时间/ID/计数）、进度条式机会条+虚线分隔的匹配展开区。
+  STORY: 主人一屏读到自己是谁（档案栏）、正在追什么（机会甲板）、每个机会成色如何（匹配区），
+  并直接改状态、跑匹配、重生成简历页——每次操作落进底部操作日志，可追溯。
+  FIRST VIEWPORT: 顶部指挥条（品牌·身份·时钟·主按钮"重新生成简历页"）；
+  左侧 2/3 是机会甲板，首条机会进度条完整可见：标题行+状态胶囊组+「跑匹配」；
+  右侧 1/3 档案栏从姓名与 tagline 开始。
+  FORM: 控制塔/签派台（flight-strip bay + dossier rail），候选结构清单第 1 位；
+  seed key: manual/degraded（concept-seed 不可用：本机 node 运行时崩溃 0xC0000409）。
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<div class="bar">
+  <div class="brand"><b>职场管家</b><span>CAREER&nbsp;OPS</span></div>
+  <div class="who" id="who">档案读取中…</div>
+  <div class="bar-right">
+    <div class="clock"><span class="dot" id="conn"></span><span id="clock">--:--:--</span></div>
+    <button class="btn ghost" id="preview" title="在新标签页打开当前简历页">预览简历页</button>
+    <button class="btn primary" id="regen" disabled>重新生成简历页</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <main class="bay">
+    <div class="sec-head"><h2>编辑台</h2><span class="meta">EDIT DESK · 一切写入先确认、自动备份</span></div>
+    <div class="editgrid">
+      <div class="editform">
+        <label>新增要点 → 指定经历</label>
+        <select id="hl-idx"></select>
+        <textarea id="hl-text" placeholder="例：主导职场管家Agent产品设计（LobeHub 私有化部署，23 名真实用户）"></textarea>
+        <button class="btn ghost" id="hl-go">提交要点（先确认）</button>
+      </div>
+
+      <div class="editform">
+        <label>新增技能（逗号分隔，可只填一类）</label>
+        <div class="row2">
+          <input id="sk-si-in" placeholder="SILICON · 如 RAG, MCP开发">
+          <input id="sk-ca-in" placeholder="CARBON · 如 医药行业人脉">
+        </div>
+        <button class="btn ghost" id="sk-go">提交技能（先确认）</button>
+      </div>
+
+      <div class="editform">
+        <label>提交新证据 → 挂到指定经历</label>
+        <select id="ev-idx"></select>
+        <textarea id="ev-text" placeholder="可核验的数字/事实来源，例：git log 自有提交 2,346 次（gitee jorpeman/lobe-hub）"></textarea>
+        <button class="btn ghost" id="ev-go">提交证据（先确认）</button>
+      </div>
+    </div>
+    <div class="hint" style="margin-top:10px">每次写入前弹窗展示确切内容，确认才落盘；写入自动备份，可在右侧「备份与回滚」恢复。改动要点后点右上「重新生成简历页」才会出现在简历上。</div>
+
+    <div class="sec-head"><h2>机会甲板</h2><span class="meta" id="bay-meta"></span></div>
+    <div id="strips"><div class="skel">正在拉取职位库…</div></div>
+  </main>
+
+  <aside class="rail">
+    <div class="block">
+      <h3>档案 <span class="meta">PROFILE</span></h3>
+      <div id="dossier" class="skel">…</div>
+    </div>
+    <div class="block">
+      <h3>经历时间线 <span class="meta" id="ev-count"></span></h3>
+      <div id="timeline" class="skel">…</div>
+    </div>
+    <div class="block skills">
+      <h3>技能矩阵 <span class="meta" id="sk-count"></span></h3>
+      <h4>SILICON · 硬技能</h4><div id="sk-si"></div>
+      <h4>CARBON · 行业沉淀</h4><div id="sk-ca"></div>
+    </div>
+    <div class="block">
+      <h3>证据台账 <span class="meta" id="evi-count"></span></h3>
+      <ul class="evi" id="evidence"></ul>
+    </div>
+    <div class="block">
+      <h3>工作流资产 <span class="meta" id="wf-count"></span></h3>
+      <div id="workflows"><div class="skel">…</div></div>
+    </div>
+
+    <div class="block">
+      <h3>备份与回滚 <span class="meta">BACKUP</span></h3>
+      <div id="backups"><div class="skel">…</div></div>
+    </div>
+
+    <div class="block">
+      <h3>操作日志 <span class="meta">AUDIT</span></h3>
+      <ul class="logfeed" id="logfeed"></ul>
+    </div>
+  </aside>
+</div>
+
+<div class="overlay" id="confirm-ov" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+  <div class="modal">
+    <h4 id="confirm-title">确认变更</h4>
+    <div class="m-body" id="confirm-body"></div>
+    <div class="m-note">确认后写入本地档案并自动备份（可在「备份与回滚」恢复）。</div>
+    <div class="m-actions">
+      <button class="btn" id="confirm-no">取消</button>
+      <button class="btn primary" id="confirm-yes">确认写入</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let STATE = null, REGEN_BUSY = false;
+
+/* 重渲染前保存、渲染后恢复用户已展开的状态（JD / 时间线要点）*/
+function snapshotOpen(){
+  const jd = [...document.querySelectorAll(".strip")].filter(s => s.querySelector(".jd.open")).map(s => s.dataset.id);
+  const tl = [...document.querySelectorAll(".tl-item.open")].map(e => e.dataset.i);
+  return {jd, tl};
+}
+function restoreOpen(o){
+  o.jd.forEach(id => {
+    const el = document.querySelector(`.strip[data-id="${CSS.escape(id)}"]`);
+    if(!el) return;
+    el.querySelector(".jd")?.classList.add("open");
+    const t = el.querySelector(".jd-toggle");
+    if(t){ t.setAttribute("aria-expanded","true"); }
+  });
+  o.tl.forEach(i => {
+    const el = document.querySelector(`.tl-item[data-i="${CSS.escape(i)}"]`);
+    if(!el) return;
+    el.classList.add("open");
+    const b = el.querySelector(".tl-more");
+    if(b){ b.setAttribute("aria-expanded","true"); b.textContent = "收起要点"; }
+  });
+}
+
+/* 时钟 */
+setInterval(() => { $("#clock").textContent = new Date().toLocaleTimeString("zh-CN", {hour12:false}); }, 1000);
+
+function toast(msg, err=false){
+  const t = $("#toast");
+  t.innerHTML = msg; t.classList.toggle("err", err); t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 4200);
+}
+
+/* ── 演示版：数据为冻结快照，写操作返回只读提示 ── */
+const SNAPSHOT = {"ok": true, "profile": {"identity": {"display_name": "黄铮 Steven Huang"}, "meta": {"tagline": "把一家传统猎头公司改造成 AI-native 平台的多 Agent 指挥官", "city": "北京"}, "contact": {"email": "steven.huang@tstarmc.com", "phone": "[主人自填]"}, "events": [{"start": "2026", "end": null, "role": "AI-Native 平台化转型（多 Agent 工程指挥）", "org": "泰伦仕 TSTAR · 自有开源分支（gitee jorpeman/lobe-hub，基于 LobeHub 硬分叉）", "highlights": ["私有化部署 LobeHub 猎头AI中台，Federation Gateway 长出 137 个 MCP 工具", "指挥 Claude Code + Codex + Kimi 三 Agent 协作：2026-06-18 起 2,346 次自有提交", "生产纪律：verify-stack 七层验证、双容器同步、fail-closed、可回滚，全程留痕", "主导职场管家Agent产品设计"], "evidence": ["137 个生产 MCP 工具", "2,346 次自有提交 / 132 天", "日均 17.8 次提交的 AI 工程节奏", "4,666 行多 Agent 协调日志（TASKBOARD）", "30 个生产容器", "LobeHub 平台 23 名用户 / 609 条消息"]}, {"start": "2012", "end": null, "role": "Managing Partner & Founder", "org": "TSTAR Consulting（泰伦仕管理咨询）", "highlights": ["创立泰伦仕，大中华区医药研发与医学事务高管搜寻", "聚焦领域：临床开发、新药研究、医学事务、产品组合管理、生物信息学、药理学", "运营首联（北京）信息技术研究院医药AI数据服务团队"], "evidence": []}, {"start": "2010", "end": "2012", "role": "Healthcare Consultant", "org": "Hudson", "highlights": ["医疗健康行业招聘咨询"], "evidence": []}, {"start": "2009", "end": "2010", "role": "Consultant", "org": "Summit HR Worldwide", "highlights": ["招聘咨询"], "evidence": []}], "skills": {"silicon": ["Claude Code（主力 AI 工程平台）", "多 Agent 编排（Claude Code / Codex / Kimi / DSH）", "MCP 工具设计与 Agent Harness 架构", "LobeHub 私有化部署与运营", "Python / Streamlit", "PostgreSQL / Elasticsearch (IK)", "CI/CD（GitHub Actions + 阿里云 ACR）", "生产治理（七层验证 / fail-closed / 回滚体系）"], "carbon": ["临床开发 / 新药研究 / 医学事务招聘（14年）", "产品组合管理 / 生物信息学 / 药理学人才图谱", "医药竞争情报产品（肿瘤/糖尿病）", "猎头团队全链路转化与财务模型"]}, "workflows": [{"event_index": 0, "nodes": [{"id": "s1", "verb": "部署", "object": "LobeHub 猎头AI中台（私有化）", "tool": "Federation Gateway（137 个 MCP 工具）", "collaborator": null, "output": "私有化中台及 137 个 MCP 工具", "sentence_idx": 0, "stated": true}, {"id": "s2", "verb": "指挥", "object": "Claude Code + Codex + Kimi 三 Agent 协作（2,346 次自有提交）", "tool": "Claude Code / Codex / Kimi", "collaborator": "三 Agent（Claude Code、Codex、Kimi）", "output": "2,346 次自有提交", "sentence_idx": 1, "stated": true}, {"id": "s3", "verb": "GxP验证", "object": "生产纪律（verify-stack 七层验证、双容器同步、fail-closed、可回滚、全程留痕）", "tool": "verify-stack", "collaborator": null, "output": "七层验证与可回滚的留痕记录", "sentence_idx": 2, "stated": true}], "edges": [{"from": "s1", "to": "s2", "kind": "sequence", "inferred": true}, {"from": "s2", "to": "s3", "kind": "sequence", "inferred": true}], "notes": ["s1→s2：中台私有化部署完成后才可能在其上指挥多 Agent 协作产出提交，先后关系为合理推断，原文无显式时序词", "s2→s3：生产纪律（验证、可回滚、留痕）通常作用于提交产出之后的质量保障环节，属推断性顺序连接", "第1句中 '长出 137 个 MCP 工具' 视为部署产出而非独立步骤，未单独拆节点；'指挥'不在动词词典中，按规则保留原词"]}, {"event_index": 1, "nodes": [{"id": "s1", "verb": "创立", "object": "泰伦仕（大中华区医药研发与医学事务高管搜寻业务）", "tool": null, "collaborator": null, "output": "公司主体", "sentence_idx": 0, "stated": true}, {"id": "s2", "verb": "搭建", "object": "首联（北京）信息技术研究院医药AI数据服务团队", "tool": null, "collaborator": null, "output": "数据服务团队", "sentence_idx": 2, "stated": true}], "edges": [{"from": "s1", "to": "s2", "kind": "sequence", "inferred": true}], "notes": ["句1为聚焦领域描述，无动作步骤，跳过", "s1->s2：创立公司后运营/搭建数据服务团队，原文未明确先后顺序，属推断的先后关系"]}, {"event_index": 2, "nodes": [], "edges": [], "notes": ["唯一句子\"医疗健康行业招聘咨询\"过于笼统，无具体动作、对象或产出，无法拆解为有效流程节点，按规则跳过。"]}, {"event_index": 3, "nodes": [], "edges": [], "notes": ["唯一职责句“招聘咨询”过于笼统，无法锚定到任何规范动词或具体对象，按铁律6跳过，不生成节点或连接。"]}]}, "jobs": [{"id": "job-1793321498", "title": "AI解决方案架构师", "company": "某创新药企", "source": "顾问推荐", "notes": "", "status": "offer", "description": "需要医药AI平台建设经验，LobeHub部署，MCP工具开发，RAG与agent系统设计", "created": 1793321498}], "matches": {}, "log": [{"time": "21:34:17", "action": "jobs", "detail": "职位库读取失败：butler CLI 退出码 1：Y\\.kimi\\dossier\\p2\\butler.py\", line 155 ⏎     \"\"\"Present the registry-anchored badge for a claim (PRD law #3).\"\"\"        for c in (self.obj.get(\"verification\") or {}).get(\"claims\", []): ⏎                                                                                ^^^ ⏎ SyntaxError: invalid syntax", "ok": false}, {"time": "21:33:17", "action": "jobs", "detail": "职位库读取失败：butler CLI 退出码 1：Y\\.kimi\\dossier\\p2\\butler.py\", line 155 ⏎     \"\"\"Present the registry-anchored badge for a claim (PRD law #3).\"\"\"        for c in (self.obj.get(\"verification\") or {}).get(\"claims\", []): ⏎                                                                                ^^^ ⏎ SyntaxError: invalid syntax", "ok": false}, {"time": "21:32:17", "action": "jobs", "detail": "职位库读取失败：butler CLI 退出码 1：Y\\.kimi\\dossier\\p2\\butler.py\", line 155 ⏎     \"\"\"Present the registry-anchored badge for a claim (PRD law #3).\"\"\"        for c in (self.obj.get(\"verification\") or {}).get(\"claims\", []): ⏎                                                                                ^^^ ⏎ SyntaxError: invalid syntax", "ok": false}, {"time": "19:29:13", "action": "重生成", "detail": "简历页 21884 字节", "ok": true}, {"time": "08:29:27", "action": "重生成", "detail": "简历页 21895 字节", "ok": true}, {"time": "08:28:30", "action": "启动", "detail": "职场管家工作台 127.0.0.1:8765", "ok": true}], "statuses": ["看机会", "已投递", "沟通中", "面试中", "offer", "放弃"], "backups": [{"name": "talent-object.json.bak-1793453730.json", "kb": 8.5, "mtime": "10-31 21:35"}, {"name": "talent-object.json.bak-1793321990.json", "kb": 8.5, "mtime": "10-30 08:59"}], "page": {"path": "C:\\Users\\EDY\\.dsh\\career-butler\\page.html", "kb": 24.0, "mtime": "10-31 19:29"}};
+async function api(path, body){
+  if(body) throw new Error("演示版为只读快照——完整版在主人本机运行，写操作已禁用");
+  return SNAPSHOT;
+}
+document.body.insertAdjacentHTML("beforeend",
+  `<div style="position:fixed;top:10px;right:12px;z-index:9999;background:#151C24;border:1px solid #4CC2FF;color:#4CC2FF;padding:4px 12px;border-radius:99px;font-size:12px;pointer-events:none">演示版 · 只读快照</div>`);
+
+
+/* 应用服务器返回的新状态；state 为 null（读取降级）时先尝试 GET 补拉，仍失败则保留本地态 */
+async function applyState(r){
+  if(r.state) { render(r.state); return; }
+  try { render(await api("/api/state")); }
+  catch(e){ toast("<b>注意</b>　变更已写入，但状态刷新失败；稍后自动重试。", true); }
+}
+
+/* ── 渲染 ─────────────────────────── */
+function snapshotFocus(){
+  const el = document.activeElement;
+  if(!el || !el.closest || el === document.body) return null;
+  const strip = el.closest(".strip"), tl = el.closest(".tl-item");
+  return {
+    stripId: strip ? strip.dataset.id : null,
+    status: el.dataset ? el.dataset.status || null : null,
+    tlIdx: tl ? tl.dataset.i : null,
+  };
+}
+function restoreFocus(f){
+  if(!f) return;
+  let el = null;
+  if(f.stripId){
+    const sel = `.strip[data-id="${CSS.escape(f.stripId)}"] .pill`;
+    el = (f.status && document.querySelector(`${sel}[data-status="${CSS.escape(f.status)}"]`)) || document.querySelector(`${sel}, .strip[data-id="${CSS.escape(f.stripId)}"] .btn`);
+  } else if(f.tlIdx != null){
+    el = document.querySelector(`.tl-item[data-i="${CSS.escape(f.tlIdx)}"] .tl-more`);
+  }
+  if(el && el.focus) el.focus();
+}
+function render(s, force){
+  if(STATE && !force && JSON.stringify(STATE) === JSON.stringify(s)) return; /* 状态没变就不动 DOM：保展开、保焦点 */
+  const open = STATE ? snapshotOpen() : {jd:[], tl:[]};
+  const focus = snapshotFocus();
+  STATE = s;
+  const p = s.profile;
+  $("#who").innerHTML = `<b>${esc(p.identity.display_name)}</b> · ${esc(p.meta.tagline)}`;
+  $("#dossier").innerHTML = `
+    <div class="dossier-name">${esc(p.identity.display_name)}</div>
+    <div class="dossier-tag">${esc(p.meta.tagline)}</div>
+    <div class="dossier-kv"><span>${esc(p.meta.city)}</span><code>${esc(p.contact.email || "")}</code></div>`;
+
+  /* 时间线 */
+  $("#ev-count").textContent = p.events.length + " 段";
+  $("#timeline").innerHTML = p.events.map((e,i) => `
+    <div class="tl-item" data-i="${i}">
+      <div class="yr">${esc(e.start)} — ${e.end ? esc(e.end) : "至今"}</div>
+      <div class="role">${esc(e.role)}</div>
+      <div class="org">${esc(e.org)}</div>
+      ${e.highlights.length ? `<button class="tl-more" aria-expanded="false">展开 ${e.highlights.length} 条要点</button>
+      <ul>${e.highlights.map(h => `<li>${esc(h)}</li>`).join("")}</ul>` : ""}
+    </div>`).join("");
+  document.querySelectorAll(".tl-more").forEach(b => b.addEventListener("click", () => {
+    const item = b.closest(".tl-item"), open = item.classList.toggle("open");
+    b.setAttribute("aria-expanded", open);
+    b.textContent = open ? "收起要点" : `展开 ${item.querySelectorAll("li").length} 条要点`;
+  }));
+
+  /* 技能 */
+  $("#sk-count").textContent = (p.skills.silicon.length + p.skills.carbon.length) + " 项";
+  $("#sk-si").innerHTML = p.skills.silicon.map(x => `<div class="skill">${esc(x)}</div>`).join("");
+  $("#sk-ca").innerHTML = p.skills.carbon.map(x => `<div class="skill">${esc(x)}</div>`).join("");
+
+  /* 证据 */
+  const evi = p.events.flatMap(e => e.evidence);
+  $("#evi-count").textContent = evi.length + " 条";
+  $("#evidence").innerHTML = evi.map(x => `<li>${esc(x)}</li>`).join("") || `<li>暂无登记</li>`;
+
+  /* 机会甲板 */
+  $("#bay-meta").textContent = s.jobs.length + " 个跟踪中";
+  $("#strips").innerHTML = s.jobs.length ? s.jobs.map(stripHTML).join("") :
+    `<div class="empty"><b>甲板暂空</b>还没有跟踪中的机会。对我说「记录一个机会」即可入列。</div>`;
+  s.jobs.forEach(j => bindStrip(j));
+
+  /* 日志 */
+  $("#logfeed").innerHTML = s.log.length ? s.log.map(l => `
+    <li class="${l.ok ? "" : "err"}"><time>${esc(l.time)}</time><span class="a">${esc(l.action)}</span><span class="d">${esc(l.detail)}</span></li>`).join("")
+    : `<li><time>--</time><span class="d">暂无操作</span></li>`;
+
+  evOptions($("#hl-idx"), p.events);
+  evOptions($("#ev-idx"), p.events);
+  renderWorkflows(p.workflows || [], p.events);
+  renderBackups(s.backups);
+
+  if(!REGEN_BUSY){ $("#regen").disabled = false; $("#regen").textContent = "重新生成简历页"; }
+  restoreOpen(open);
+  restoreFocus(focus);
+}
+
+function stripHTML(j){
+  const tones = {"offer":"offer","放弃":"drop"};
+  const pills = STATE.statuses.map(st =>
+    `<button class="pill" data-status="${esc(st)}" data-tone="${tones[st]||""}" aria-pressed="${st===j.status}" title="改为 ${esc(st)}">${esc(st)}</button>`).join("");
+  return `
+  <article class="strip" data-id="${esc(j.id)}">
+    <div class="strip-top">
+      <span class="tab">${esc(j.id)}</span>
+      <div class="title"><b>${esc(j.title)}</b><span>${esc(j.company)}</span></div>
+      <span class="src">${esc(j.source || "未标注")}</span>
+      <div class="pills" role="group" aria-label="机会状态">${pills}</div>
+      <button class="btn ghost act-match">跑匹配</button>
+    </div>
+    <div class="matchzone"><div><div class="match-inner"></div></div></div>
+    ${j.description ? `<button class="jd-toggle" aria-expanded="false"><svg class="chev" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>JD 全文</button><div class="jd">${esc(j.description)}</div>` : ""}
+  </article>`;
+}
+
+function bindStrip(j){
+  const el = document.querySelector(`.strip[data-id="${CSS.escape(j.id)}"]`);
+  if(!el) return;
+
+  el.querySelectorAll(".pill").forEach(p => p.addEventListener("click", async () => {
+    if(p.getAttribute("aria-pressed") === "true") return;
+    el.classList.add("busy");
+    try{
+      const r = await api("/api/jobs-status", {id: j.id, status: p.dataset.status});
+      await applyState(r);
+      el.classList.remove("busy");
+      toast(`<b>状态已更新</b>　${esc(j.title)} → ${esc(p.dataset.status)}<br>职位库 jobs.json 已同步`);
+    }catch(e){ toast(`<b>更新失败</b>　${esc(e.message)}`, true); el.classList.remove("busy"); }
+  }));
+
+  el.querySelector(".act-match")?.addEventListener("click", async () => {
+    el.classList.add("busy");
+    try{
+      const r = await api("/api/match", {id: j.id});
+      await applyState(r);
+      el.classList.remove("busy");
+      requestAnimationFrame(() => paintMatch(j.id, r.result, true));
+      toast(`<b>匹配完成</b>　score ${esc(r.result.match_score)} · 关键词匹配非模型判断，主人定夺`);
+    }catch(e){ toast(`<b>匹配失败</b>　${esc(e.message)}`, true); el.classList.remove("busy"); }
+  });
+
+  el.querySelector(".jd-toggle")?.addEventListener("click", () => {
+    const open = el.querySelector(".jd").classList.toggle("open");
+    el.querySelector(".jd-toggle").setAttribute("aria-expanded", open);
+  });
+
+  /* 已有缓存匹配结果则直接展开（无动画） */
+  const cached = STATE.matches[j.id];
+  if(cached) paintMatch(j.id, cached, false);
+}
+
+/* 匹配区渲染；animate=true 时分数做指数缓出滚动（本页唯一的编排动效）*/
+function paintMatch(id, m, animate){
+  const el = document.querySelector(`.strip[data-id="${CSS.escape(id)}"] .match-inner`);
+  if(!el) return;
+  if(typeof m.match_score !== "number"){
+    el.innerHTML = `<div class="matchnote">匹配输出异常（无有效分数），请稍后重试。</div>`;
+    el.closest(".matchzone").classList.add("open");
+    return;
+  }
+  const hits = (m.matched_terms||[]).map(t => `<span class="chip hit">${esc(t)}</span>`).join("");
+  const miss = (m.missing_terms||[]).map(t => `<span class="chip miss">${esc(t)}</span>`).join("");
+  el.innerHTML = `
+    <div class="score"><div class="n"><span class="num">0</span><small> /100</small></div><div class="l">关键词匹配分</div></div>
+    <div class="terms">
+      <div class="row"><span class="cap">命中</span>${hits || '<span class="chip hit">无</span>'}</div>
+      <div class="row"><span class="cap">缺口</span>${miss || '<span class="chip miss">无</span>'}</div>
+      <div class="matchnote">关键词匹配非模型判断，matched/missing 全列出，由主人自己判断。</div>
+    </div>`;
+  el.closest(".matchzone").classList.add("open");
+  const num = el.querySelector(".num"), target = m.match_score || 0;
+  if(!animate){ num.textContent = target; return; }
+  const t0 = performance.now(), dur = 900;
+  (function tick(t){
+    const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(2, -10 * k); /* 指数缓出 */
+    num.textContent = Math.round(target * e);
+    if(k < 1) requestAnimationFrame(tick); else num.textContent = target;
+  })(t0);
+}
+
+/* ── 变更确认层：一切写入先弹窗、主人点「确认写入」才落盘 ── */
+let _confirmResolve = null;
+function confirmDlg(title, bodyHTML){
+  $("#confirm-title").textContent = title;
+  $("#confirm-body").innerHTML = bodyHTML;
+  $("#confirm-ov").classList.add("show");
+  $("#confirm-yes").focus();
+  return new Promise(res => { _confirmResolve = res; });
+}
+function confirmDone(v){
+  $("#confirm-ov").classList.remove("show");
+  if(_confirmResolve){ _confirmResolve(v); _confirmResolve = null; }
+}
+$("#confirm-yes").addEventListener("click", () => confirmDone(true));
+$("#confirm-no").addEventListener("click", () => confirmDone(false));
+$("#confirm-ov").addEventListener("click", e => { if(e.target === e.currentTarget) confirmDone(false); });
+document.addEventListener("keydown", e => { if(e.key === "Escape" && $("#confirm-ov").classList.contains("show")) confirmDone(false); });
+
+async function guardedChange(kind, bodyHTML, run){
+  const ok = await confirmDlg(kind, bodyHTML);
+  if(!ok){ toast("已取消，未写入任何内容"); return; }
+  try{
+    const r = await run();
+    await applyState(r);
+    toast(`<b>已写入</b>　${kind} · 档案已自动备份，可回滚`);
+  }catch(e){ toast(`<b>写入失败</b>　${esc(e.message)}`, true); }
+}
+
+function evOptions(sel, events){
+  const prev = sel.value;
+  sel.innerHTML = events.map((e,i) =>
+    `<option value="${i}">${esc(e.start)} · ${esc(e.role)} @ ${esc(e.org)}</option>`).join("");
+  if(prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+
+function bindEditForms(){
+  $("#hl-go").addEventListener("click", () => {
+    const i = +$("#hl-idx").value, t = $("#hl-text").value.trim();
+    if(!t) return toast("<b>先填要点内容</b>　文本为空，未提交", true);
+    const e = STATE.profile.events[i];
+    guardedChange("新增要点", `将写入 <b>经历 ${i}（${esc(e.role)} @ ${esc(e.org)}）</b> 的要点列表末尾：<br><br>「${esc(t)}」<br><br>之后可再点「重新生成简历页」让改动出现在简历上。`,
+      () => api("/api/add-highlight", {idx:i, text:t}).then(r => { $("#hl-text").value = ""; return r; }));
+  });
+
+  $("#sk-go").addEventListener("click", () => {
+    const si = $("#sk-si-in").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    const ca = $("#sk-ca-in").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    if(!si.length && !ca.length) return toast("<b>先填技能</b>　两类都为空，未提交", true);
+    guardedChange("新增技能",
+      `SILICON：${si.length ? si.map(esc).join("、") : "<i>（无）</i>"}<br>CARBON：${ca.length ? ca.map(esc).join("、") : "<i>（无）</i>"}`,
+      () => api("/api/add-skills", {silicon:si, carbon:ca}).then(r => { $("#sk-si-in").value=""; $("#sk-ca-in").value=""; return r; }));
+  });
+
+  $("#ev-go").addEventListener("click", () => {
+    const i = +$("#ev-idx").value, t = $("#ev-text").value.trim();
+    if(!t) return toast("<b>先填证据内容</b>　文本为空，未提交", true);
+    const e = STATE.profile.events[i];
+    guardedChange("提交证据", `将把以下证据登记到 <b>经历 ${i}（${esc(e.role)} @ ${esc(e.org)}）</b> 名下：<br><br>「${esc(t)}」`,
+      () => api("/api/add-evidence", {idx:i, text:t}).then(r => { $("#ev-text").value = ""; return r; }));
+  });
+
+  $("#preview").addEventListener("click", () => window.open("../", "_blank"));
+}
+bindEditForms();
+
+function renderWorkflows(wfs, events){
+  const withNodes = wfs.filter(w => (w.nodes||[]).length);
+  $("#wf-count").textContent = withNodes.length + " 条流程";
+  $("#workflows").innerHTML = withNodes.length ? withNodes.map(w => {
+    const e = events[w.event_index];
+    return `<div class="wf">
+      <div class="wf-ev">${e ? esc(e.role) : "经历 " + w.event_index}</div>
+      ${w.nodes.map(n => `<div class="wf-node"><span class="v">${esc(n.verb)}</span><span class="o">${esc(n.object)}</span>${n.tool ? `<span class="t">[${esc(n.tool)}]</span>` : ""}</div>`).join("")}
+      ${w.notes && w.notes.length ? `<div class="hint">${esc(w.notes[0])}</div>` : ""}
+    </div>`;
+  }).join("") : `<div class="wf-empty">本段经历暂无可拆解的流程节点。</div>`;
+}
+
+function renderBackups(baks){
+  $("#backups").innerHTML = baks && baks.length ? baks.map(b => `
+    <div class="bak" data-name="${esc(b.name)}">
+      <time>${esc(b.mtime)}</time><span class="kb">${esc(b.kb)} KB</span>
+      <button class="btn ghost">恢复此版</button>
+    </div>`).join("") : `<div class="hint">暂无备份；任何写入操作都会先自动产生一份。</div>`;
+  document.querySelectorAll("#backups .bak .btn").forEach(btn => btn.addEventListener("click", () => {
+    const name = btn.closest(".bak").dataset.name;
+    guardedChange("回滚档案", `将把档案整体恢复到备份 <b>${esc(name)}</b> 的状态。<br>当前状态也会先存为一份新备份，操作可逆。`,
+      () => api("/api/backup-restore", {name}));
+  }));
+}
+
+/* ── 主行动 ─────────────────────────── */
+$("#regen").addEventListener("click", async () => {
+  const b = $("#regen");
+  if(REGEN_BUSY) return;
+  const pg = STATE && STATE.page;
+  const ok = await confirmDlg("重新生成简历页",
+    `将按当前档案内容重写 <b>page.html</b>。${pg ? `现版本：${esc(pg.kb)} KB（${esc(pg.mtime)}）` : ""}<br><br>生成后可在「预览简历页」查看效果；改动来源=档案（Talent Object），档案本身不会被此操作修改。`);
+  if(!ok){ toast("已取消，未生成"); return; }
+  REGEN_BUSY = true; b.disabled = true; b.textContent = "生成中…";
+  try{
+    const r = await api("/api/regen", {});
+    await applyState(r);
+    toast(`<b>简历页已重新生成</b>　${esc(r.result.bytes)} 字节 · <a href="../" target="_blank" style="color:var(--info)">立即预览 →</a>`);
+  }catch(e){ toast(`<b>生成失败</b>　${esc(e.message)}`, true); }
+  REGEN_BUSY = false; b.disabled = false; b.textContent = "重新生成简历页";
+});
+
+/* 连接状态 */
+async function boot(){
+  try{
+    render(await api("/api/state"));
+    $("#conn").classList.remove("err");
+  }catch(e){
+    $("#conn").classList.add("err");
+    $("#strips").innerHTML = `<div class="empty"><b>连接不上本地服务</b>${esc(e.message)}<br>请确认 server.py 正在运行。</div>`;
+  }
+}
+boot();
+setInterval(() => { api("/api/state").then(s => { render(s); $("#conn").classList.remove("err"); }).catch(() => $("#conn").classList.add("err")); }, 30000);
+</script>
+</body>
+</html>
