@@ -376,13 +376,20 @@ document.getElementById('foot').innerHTML=
   const toast=document.getElementById('shareToast');
   const qrHost=document.getElementById('qrcode');
   let open=false, qrDone=false;
+  // 本地/公网自适应：本地(127.0.0.1/localhost/file:) 自动换成公网地址，否则用当前地址
+  const PUBLIC='https://jorpeman10-cell.github.io/Career-Mate/';
+  function shareUrl(){
+    const h=location.hostname||'';
+    const local=(h==='127.0.0.1'||h==='localhost'||h==='::1'||location.protocol==='file:');
+    return local ? PUBLIC : location.href;
+  }
   function showToast(msg){
     toast.textContent=msg; toast.classList.add('show');
     setTimeout(()=>toast.classList.remove('show'),2200);
   }
   fab.addEventListener('click',()=>{ open=!open; menu.classList.toggle('open',open); fab.textContent=open?'✕':'⇧'; });
   document.getElementById('shareCopy').addEventListener('click',()=>{
-    const url=location.href;
+    const url=shareUrl();
     const done=()=>showToast('✓ 已复制，去微信粘贴即可');
     const fb=()=>{
       const ta=document.createElement('textarea'); ta.value=url;
@@ -394,7 +401,7 @@ document.getElementById('foot').innerHTML=
   document.getElementById('shareWechat').addEventListener('click',()=>{
     qrHost.style.display='flex';
     if(qrDone) return; qrDone=true;
-    const url=location.href;
+    const url=shareUrl();
     const cdns=[
       'https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js',
       'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js',
